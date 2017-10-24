@@ -1,4 +1,4 @@
-package Wallet
+package main
 
 import (
 	"gopkg.in/mgo.v2"
@@ -19,11 +19,11 @@ import (
 
 
 type Acn struct {
-	Cizid   int
-	Wallid   int
-	Fname 	string
-	Opendate   time.Time
-	Balance   float64
+	Cizid   int 	`bson:"wallet_id"`
+	Wallid   int	`bson:"citizen_id"`
+	Fname 	string	`bson:"full_name"`
+	Opendate   time.Time	`bson:"open_datetime"`
+	Balance   float64	`bson:"ledger_balance"`
 }
 
 type rqBody struct {
@@ -31,8 +31,8 @@ type rqBody struct {
 }
 
 type RqAcn struct {
-	Cizid   int    `json:"cizid"`
-	Fname 	string  `json:"fname"`
+	Cizid   int    `json:"citizen_id"`
+	Fname 	string  `json:"full_name"`
 }
 
 type rsBody struct {
@@ -40,8 +40,8 @@ type rsBody struct {
 }
 
 type RsAcn struct {
-	Wallid   int    `json:"wallid"`
-	Opendate   time.Time    `json:"opendate"`
+	Wallid   int    `json:"wallet_id"`
+	Opendate   time.Time    `json:"open_datetime"`
 }
 
 type ErrorLT struct {
@@ -64,7 +64,6 @@ func HeaderJSON(w http.ResponseWriter, code int) {
 	w.Header().Set("x-job-id", "")
 	w.Header().Set("x-request-id", uuid)
 	w.WriteHeader(code)
-	//w.Write(json)
 }
 
 func main() {
@@ -108,6 +107,16 @@ func ensureIndex2(s *mgo.Session) {
 func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 
+	/*
+		{
+			"rqBody": [
+			{
+			"cizid": 1969800106049,
+			"fname": "EOF erer"
+			}
+		]
+		}*/
+
 		session := s.Copy()
 		defer session.Close()
 
@@ -132,6 +141,7 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(errorlt)
 			return
 		}
+
 
 		var rsbody rsBody
 		statcd := http.StatusCreated
@@ -166,6 +176,8 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 				continue
 
 			}
+
+
 			c := session.DB("wallet").C("acn")
 			cntCizid , err := c.Find("cizid").Count()
 			//log.Println(cntCizid)
@@ -195,8 +207,8 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:"Failed insert" })
 				statcd = http.StatusInternalServerError
 				continue
+
 				log.Println("Failed insert book: ", err)
-				//return
 			}
 
 
@@ -211,6 +223,7 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 		}
 
 		HeaderJSON(w,statcd)
+
 		json.NewEncoder(w).Encode(rsbody)
 
 	}
