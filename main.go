@@ -235,7 +235,6 @@ func creDigit(runseq string) int{
 	log.Println(len(runseq))
 	for i := 0; i < len(runseq) ; i++ {
 
-		log.Println(i)
 		intCC, _ := strconv.Atoi(string(runseq[i]))
 		sum += intCC *(i+2)
 	}
