@@ -19,8 +19,8 @@ import (
 
 
 type Acn struct {
-	Cizid   int 	`bson:"wallet_id"`
-	Wallid   int	`bson:"citizen_id"`
+	Cizid   int 	`bson:"citizen_id"`
+	Wallid   int	`bson:"wallet_id"`
 	Fname 	string	`bson:"full_name"`
 	Opendate   time.Time	`bson:"open_datetime"`
 	Balance   float64	`bson:"ledger_balance"`
@@ -74,7 +74,7 @@ func main() {
 	defer session.Close()
 
 	session.SetMode(mgo.Monotonic, true)
-	ensureIndex2(session)
+	ensureIndex(session)
 
 	router := mux.NewRouter()
 
@@ -84,14 +84,14 @@ func main() {
 
 }
 
-func ensureIndex2(s *mgo.Session) {
+func ensureIndex(s *mgo.Session) {
 	session := s.Copy()
 	defer session.Close()
 
 	c := session.DB("wallet").C("acn")
 
 	index := mgo.Index{
-		Key:        []string{"cizid"},
+		Key:        []string{"citizen_id","wallet_id"},
 		Unique:     true,
 		DropDups:   true,
 		Background: true,
@@ -107,15 +107,17 @@ func ensureIndex2(s *mgo.Session) {
 func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-	/*
-		{
-			"rqBody": [
+		/*
+			test body
+
 			{
-			"cizid": 1969800106049,
-			"fname": "EOF erer"
-			}
-		]
-		}*/
+				"rqBody": [
+				{
+				"citizen_id": 1969800106049,
+				"full_name": "EOF erer"
+				}
+			]
+			}*/
 
 		session := s.Copy()
 		defer session.Close()
@@ -148,6 +150,14 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 
 		zerr := false
 
+		if len(rqbody.RqAcn) > 1 {
+
+			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:"Incorect body"})
+			HeaderJSON(w,http.StatusBadRequest)
+			json.NewEncoder(w).Encode(errorlt)
+			return
+		}
+
 		for i := 0; i < len(rqbody.RqAcn); i++ {
 
 			fmt.Println(rqbody.RqAcn[i].Cizid)
@@ -179,9 +189,9 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 
 
 			c := session.DB("wallet").C("acn")
-			cntCizid , err := c.Find("cizid").Count()
-			//log.Println(cntCizid)
+			cntCizid , err := c.Find("citizen_id").Count()
 			cntCizid += 1001
+
 			//Generate wallet id
 			runseq := leftPad2Len(strconv.Itoa(cntCizid), "0", 10)
 			chkdigit := strconv.Itoa(creDigit(runseq))
@@ -208,9 +218,7 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 				statcd = http.StatusInternalServerError
 				continue
 
-				log.Println("Failed insert book: ", err)
 			}
-
 
 			rsbody.RsAcn =  append(rsbody.RsAcn,RsAcn{Wallid:acn.Wallid,Opendate:acn.Opendate} )
 
@@ -223,7 +231,6 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 		}
 
 		HeaderJSON(w,statcd)
-
 		json.NewEncoder(w).Encode(rsbody)
 
 	}
