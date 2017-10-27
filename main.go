@@ -99,7 +99,7 @@ func ensureIndex(s *mgo.Session) {
 	c := session.DB("wallet").C("acn")
 
 	index := mgo.Index{
-		Key:        []string{"citizen_id","wallet_id"},
+		Key:        []string{"citizen_id"},
 		Unique:     true,
 		DropDups:   true,
 		Background: true,
