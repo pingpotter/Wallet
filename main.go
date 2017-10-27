@@ -59,21 +59,10 @@ func HeaderJSON(w http.ResponseWriter, code int) {
 	uuid, _ := newUUID()
 
 	w.Header().Set("x-request-id", uuid)
-	w.Header().Set("x-real-ip", "")
-	w.Header().Set("x-application", "")
-	w.Header().Set("user-agent", "")
 	w.Header().Set("datetime", time.Now().String())
-	w.Header().Set("accept-language", "")
-	w.Header().Set("accept-encoding", "")
-	w.Header().Set("x-job-id", "")
-	w.Header().Set("x-caller-service", "")
-	w.Header().Set("x-caller-domain", "")
-	w.Header().Set("accept", "")
-	w.Header().Set("x-device", "")
-	w.Header().Set("x-channel", "")
-
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("x-roundtrip", "")
+	w.Header().Set("x-job-id", "")
 	w.WriteHeader(code)
 }
 
