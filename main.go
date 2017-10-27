@@ -15,15 +15,16 @@ import (
 	"fmt"
 	"strings"
 	"io/ioutil"
+	"gopkg.in/mgo.v2/bson"
 )
 
 
 type Acn struct {
-	Cizid   int 	`bson:"citizen_id"`
-	Wallid   int	`bson:"wallet_id"`
-	Fname 	string	`bson:"full_name"`
-	Opendate   time.Time	`bson:"open_datetime"`
-	Balance   float64	`bson:"ledger_balance"`
+	Cizid   int 	`json:"citizen_id" bson:"citizen_id" `
+	Wallid   int	`json:"wallet_id" bson:"wallet_id"`
+	Fname 	string	`json:"full_name" bson:"full_name"`
+	Opendate   time.Time	`json:"open_datetime" bson:"open_datetime"`
+	Balance   float64	`json:"ledger_balance" bson:"ledger_balance"`
 }
 
 type rqBody struct {
@@ -42,6 +43,10 @@ type rsBody struct {
 type RsAcn struct {
 	Wallid   int    `json:"wallet_id"`
 	Opendate   time.Time    `json:"open_datetime"`
+}
+
+type rsInqWalletBody struct {
+	rsInqWalletAcn   []Acn    `json:"rsBody"`
 }
 
 type ErrorLT struct {
@@ -79,6 +84,7 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/v1/accounts", addAcn(session)).Methods("POST")		//Create Wallet Account
+	router.HandleFunc("/v1/accounts/{walletid}", inqAcnByWallet(session)).Methods("GET")		//inquiry Account by walletID
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 
@@ -233,6 +239,55 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 		HeaderJSON(w,statcd)
 		json.NewEncoder(w).Encode(rsbody)
 
+	}
+}
+
+func inqAcnByWallet(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := s.Copy()
+		defer session.Close()
+
+		vars := mux.Vars(r)
+		var walletid int
+		walletid, _ = strconv.Atoi(vars["walletid"])
+
+
+		c := session.DB("wallet").C("acn")
+
+
+		var acn Acn
+		var errorlt ErrorLT
+
+		var rsInqWalletBody rsInqWalletBody
+		statcd := http.StatusOK
+		err := c.Find(bson.M{"wallet_id": walletid}).One(&acn)
+
+		if err != nil {
+			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:string(err.Error())})
+			HeaderJSON(w,http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(errorlt)
+			log.Println("Failed find Account : ", err)
+			return
+		}
+
+		if strconv.Itoa(acn.Wallid) == "" {
+			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:"Account not found"})
+			HeaderJSON(w,http.StatusNotFound)
+			json.NewEncoder(w).Encode(errorlt)
+			return
+		}
+
+		rsInqWalletBody.rsInqWalletAcn =  append(rsInqWalletBody.rsInqWalletAcn,Acn{Cizid:acn.Cizid,Wallid:acn.Wallid,
+		Fname:acn.Fname,Opendate:acn.Opendate,Balance:acn.Balance})
+
+
+		//HeaderJSON(w,statcd)
+		//json.NewEncoder(w).Encode(rsInqWalletBody)
+
+		respBody, err := json.MarshalIndent(rsInqWalletBody, "", "  ")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(statcd)
+		w.Write(respBody)
 	}
 }
 
