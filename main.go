@@ -36,6 +36,10 @@ type RqAcn struct {
 	Fname 	string  `json:"full_name"`
 }
 
+type rsInqWalletBody struct {
+	RsInqWalletAcn   []Acn    `json:"rsBody"`
+}
+
 type rsBody struct {
 	RsAcn   []RsAcn    `json:"rsBody"`
 }
@@ -43,10 +47,6 @@ type rsBody struct {
 type RsAcn struct {
 	Wallid   int    `json:"wallet_id"`
 	Opendate   time.Time    `json:"open_datetime"`
-}
-
-type rsInqWalletBody struct {
-	rsInqWalletAcn   []Acn    `json:"rsBody"`
 }
 
 type ErrorLT struct {
@@ -258,7 +258,7 @@ func inqAcnByWallet(s *mgo.Session) func(w http.ResponseWriter, r *http.Request)
 		var acn Acn
 		var errorlt ErrorLT
 
-		var rsInqWalletBody rsInqWalletBody
+		var rsInqWal rsInqWalletBody
 		statcd := http.StatusOK
 		err := c.Find(bson.M{"wallet_id": walletid}).One(&acn)
 
@@ -277,17 +277,13 @@ func inqAcnByWallet(s *mgo.Session) func(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		rsInqWalletBody.rsInqWalletAcn =  append(rsInqWalletBody.rsInqWalletAcn,Acn{Cizid:acn.Cizid,Wallid:acn.Wallid,
-		Fname:acn.Fname,Opendate:acn.Opendate,Balance:acn.Balance})
+		rsInqWal.RsInqWalletAcn =  append(rsInqWal.RsInqWalletAcn,Acn{Cizid:acn.Cizid,Wallid:acn.Wallid,
+		Fname:acn.Fname,Opendate:acn.Opendate,Balance:acn.Balance} )
+
+		HeaderJSON(w,statcd)
+		json.NewEncoder(w).Encode(rsInqWal)
 
 
-		//HeaderJSON(w,statcd)
-		//json.NewEncoder(w).Encode(rsInqWalletBody)
-
-		respBody, err := json.MarshalIndent(rsInqWalletBody, "", "  ")
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(statcd)
-		w.Write(respBody)
 	}
 }
 
