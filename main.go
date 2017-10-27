@@ -85,8 +85,10 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/v1/accounts", addAcn(session)).Methods("POST")		//Create Wallet Account
+	router.HandleFunc("/v1/accounts/search", inqAcnByFname(session)).Methods("GET").Queries()
 	router.HandleFunc("/v1/accounts/{walletid}", inqAcnByWallet(session)).Methods("GET")		//inquiry Account by walletID
 	router.HandleFunc("/v1/accounts", inqAcnByCizid(session)).Methods("GET").Queries()
+
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 
@@ -323,6 +325,47 @@ func inqAcnByCizid(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) 
 
 		rsInqWal.RsInqWalletAcn =  append(rsInqWal.RsInqWalletAcn,Acn{Cizid:acn.Cizid,Wallid:acn.Wallid,
 			Fname:acn.Fname,Opendate:acn.Opendate,Balance:acn.Balance} )
+
+		HeaderJSON(w,statcd)
+		json.NewEncoder(w).Encode(rsInqWal)
+
+
+	}
+}
+
+func inqAcnByFname(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session := s.Copy()
+		defer session.Close()
+
+		m, _ := url.ParseQuery(r.URL.RawQuery)
+		Fname := string(m["full_name"][0])
+		Fname = ".*"+Fname+".*"
+
+		c := session.DB("wallet").C("acn")
+
+		var acn []Acn
+		var errorlt ErrorLT
+
+		var rsInqWal rsInqWalletBody
+		statcd := http.StatusOK
+		//err := c.Find(bson.M{"full_name": Fname}).All(&acn)
+		err := c.Find(bson.M{"full_name": bson.M{"$regex": bson.RegEx{Fname, "i"}}}).All(&acn)
+
+		if err != nil {
+			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:string(err.Error())})
+			HeaderJSON(w,http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(errorlt)
+			log.Println("Failed find Account : ", err)
+			return
+		}
+
+
+		for i := 0; i < len(acn);i++  {
+			rsInqWal.RsInqWalletAcn =  append(rsInqWal.RsInqWalletAcn,Acn{Cizid:acn[i].Cizid,Wallid:acn[i].Wallid,
+				Fname:acn[i].Fname,Opendate:acn[i].Opendate,Balance:acn[i].Balance} )
+		}
+
 
 		HeaderJSON(w,statcd)
 		json.NewEncoder(w).Encode(rsInqWal)
