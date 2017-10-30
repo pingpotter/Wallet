@@ -19,22 +19,16 @@ import (
 	"net/url"
 )
 
-
 type Acn struct {
 	Cizid   int 	`json:"citizen_id" bson:"citizen_id" `
-	Wallid   int	`json:"wallet_id" bson:"wallet_id"`
+	Wallid   int	`json:"wallet_id,omitempty" bson:"wallet_id"`
 	Fname 	string	`json:"full_name" bson:"full_name"`
-	Opendate   time.Time	`json:"open_datetime" bson:"open_datetime"`
-	Balance   float64	`json:"ledger_balance" bson:"ledger_balance"`
+	Opendate   time.Time	`json:"open_datetime,omitempty" bson:"open_datetime"`
+	Balance   float64	`json:"ledger_balance,omitempty" bson:"ledger_balance"`
 }
 
-type rqBody struct {
-	RqAcn   []RqAcn    `json:"rqBody"`
-}
-
-type RqAcn struct {
-	Cizid   int    `json:"citizen_id"`
-	Fname 	string  `json:"full_name"`
+type RqBody struct {
+	RqAcn   []Acn    `json:"rqBody"`
 }
 
 type rsInqWalletBody struct {
@@ -132,9 +126,11 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 		session := s.Copy()
 		defer session.Close()
 
-		var rqbody rqBody
+		var rqBody RqBody
 		var acn Acn
 		var errorlt ErrorLT
+		var rsbody rsBody
+		statCd := http.StatusBadRequest
 
 		body, err := ioutil.ReadAll(r.Body)
 		if err != nil {
@@ -145,7 +141,7 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		err = json.Unmarshal(body, &rqbody)
+		err = json.Unmarshal(body, &rqBody)
 		if err != nil {
 
 			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:string(err.Error())})
@@ -155,12 +151,7 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 		}
 
 
-		var rsbody rsBody
-		statcd := http.StatusCreated
-
-		zerr := false
-
-		if len(rqbody.RqAcn) > 1 {
+		if len(rqBody.RqAcn) > 1 {
 
 			errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:"Incorect body"})
 			HeaderJSON(w,http.StatusBadRequest)
@@ -168,64 +159,87 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		for i := 0; i < len(rqbody.RqAcn); i++ {
+		for i := 0; i < len(rqBody.RqAcn); i++ {
 
-			fmt.Println(rqbody.RqAcn[i].Cizid)
+			//fmt.Println(rqbody.RqAcn[i].Cizid)
 
-			chkz := chkCIZID(rqbody.RqAcn[i].Cizid)
-			zcid := strconv.Itoa(rqbody.RqAcn[i].Cizid)
+			if rqBody.RqAcn[i].Wallid > 0 {
 
-			if !chkz {
-
-				zerr = true
-				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"001",Erdes:"Incorrect Citizen ID "+zcid})
-				statcd = http.StatusBadRequest
+				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"001",Erdes:"Incorect body"})
+				statCd = http.StatusBadRequest
 
 				continue
 
 			}
 
-			var validName = regexp.MustCompile(`^[a-zA-Z.,-]+( [a-zA-Z.,-]+)+$`).MatchString(rqbody.RqAcn[i].Fname)
+			if rqBody.RqAcn[i].Balance > 0 {
 
-			if !validName {
-
-				zerr = true
-				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"003",Erdes:"Incorrect Name"+rqbody.RqAcn[i].Fname})
-				statcd = http.StatusBadRequest
+				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"001",Erdes:"Incorect body"})
+				statCd = http.StatusBadRequest
 
 				continue
 
 			}
 
+			if rqBody.RqAcn[i].Opendate.Format("20060102") != "00010101" {
+
+				log.Println(rqBody.RqAcn[i].Opendate.Format("20060102"))
+				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"001",Erdes:"Incorect body"})
+				statCd = http.StatusBadRequest
+
+				continue
+
+			}
+
+			chkZid := chkCIZID(rqBody.RqAcn[i].Cizid)
+			strCizid := strconv.Itoa(rqBody.RqAcn[i].Cizid)
+
+			if !chkZid || (len(strconv.Itoa(rqBody.RqAcn[i].Cizid)) > 13) {
+
+				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"001",Erdes:"Incorrect Citizen ID "+strCizid})
+				statCd = http.StatusBadRequest
+
+				continue
+
+			}
+
+			var validName = regexp.MustCompile(`^[a-zA-Z.,-]+( [a-zA-Z.,-]+)+$`).MatchString(rqBody.RqAcn[i].Fname)
+
+			if !validName || (len(rqBody.RqAcn[i].Fname) > 50) {
+
+				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"003",Erdes:"Incorrect Name"+rqBody.RqAcn[i].Fname})
+				statCd = http.StatusBadRequest
+
+				continue
+
+			}
 
 			c := session.DB("wallet").C("acn")
 			cntCizid , err := c.Find("citizen_id").Count()
 			cntCizid += 1001
 
 			//Generate wallet id
-			runseq := leftPad2Len(strconv.Itoa(cntCizid), "0", 10)
-			chkdigit := strconv.Itoa(creDigit(runseq))
-			wallid := "1"+runseq+chkdigit
+			runSeq := leftPad2Len(strconv.Itoa(cntCizid), "0", 10)
+			chkDigit := strconv.Itoa(creDigit(runSeq))
+			wallId := "1"+runSeq+chkDigit
 
-			acn.Cizid = rqbody.RqAcn[i].Cizid
-			acn.Fname = strings.ToUpper(rqbody.RqAcn[i].Fname)
+			acn.Cizid = rqBody.RqAcn[i].Cizid
+			acn.Fname = strings.ToUpper(rqBody.RqAcn[i].Fname)
 			acn.Opendate = time.Now()
-			acn.Wallid, _ = strconv.Atoi(wallid)
+			acn.Wallid, _ = strconv.Atoi(wallId)
 
 			err = c.Insert(acn)
 			if err != nil {
 
-				zerr = true
-
 				if mgo.IsDup(err) {
 
 
-					errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"002",Erdes:"Duplicate Citizen ID "+zcid})
-					statcd = http.StatusBadRequest
+					errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"002",Erdes:"Duplicate Citizen ID "+strCizid})
+					statCd = http.StatusBadRequest
 					continue
 				}
 				errorlt.Errs = append(errorlt.Errs,Errs{Ercd:"9999",Erdes:"Failed insert" })
-				statcd = http.StatusInternalServerError
+				statCd = http.StatusInternalServerError
 				continue
 
 			}
@@ -234,13 +248,13 @@ func addAcn(s *mgo.Session) func(w http.ResponseWriter, r *http.Request) {
 
 		}
 
-		if zerr {
-			HeaderJSON(w, statcd)
+		if len(errorlt.Errs) > 0 {
+			HeaderJSON(w, statCd)
 			json.NewEncoder(w).Encode(errorlt)
 			return
 		}
 
-		HeaderJSON(w,statcd)
+		HeaderJSON(w,http.StatusOK)
 		json.NewEncoder(w).Encode(rsbody)
 
 	}
